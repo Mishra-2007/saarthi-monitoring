@@ -1,0 +1,7 @@
+{
+  "name": "saarthi-monitoring",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Smart real-time monitoring and inspection prototype for DoSJE schemes",
+  "scripts": { "start": "node server.js" }
+}
