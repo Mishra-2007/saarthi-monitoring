@@ -28,6 +28,7 @@ let alerts = [
 let reports = [];
 let feedback = [];
 const cameraRooms = new Map();
+const mobileCctvRooms = new Map();
 const employees = [{id:'GOV-2026-1001',name:'Arjun Mehta',email:'arjun.mehta@dosje.gov.in',password:'Saarthi@2026',role:'PMU Inspector',verified:true}];
 const pendingVerifications = new Map();
 const sessions = new Map();
@@ -64,7 +65,8 @@ const server = http.createServer(async (req,res) => {
     const item={id:'GRV-'+Math.floor(100000+Math.random()*899999),category:data.category,ngo:data.ngo||'Not specified',message:data.message,phone:String(data.phone).replace(/\D/g,''),anonymous:Boolean(data.anonymous),submittedAt:new Date().toISOString(),status:'Received'};
     feedback.unshift(item); alerts.unshift({id:'AL-'+Math.floor(500+Math.random()*99),type:'Beneficiary grievance',site:item.ngo,text:`New ${item.category.toLowerCase()} grievance received.`,severity:'warning',time:'Just now'}); return json(res,{reference:item.id,status:item.status},201);
   }
-  if (url.pathname.startsWith('/api/') && !sessionUser(req)) return json(res,{error:'Authentication required.'},401);
+  const publicCameraEndpoint=['/api/mobile-cctv/room','/api/mobile-cctv/signal','/api/mobile-cctv/signals'].includes(url.pathname);
+  if (url.pathname.startsWith('/api/') && !publicCameraEndpoint && !sessionUser(req)) return json(res,{error:'Authentication required.'},401);
   if (url.pathname === '/api/dashboard') return json(res, { sites, inspections, alerts, reports, stats:{ monitored:128, live:116, inspections:18, compliance:87 } });
   if (url.pathname === '/api/assign' && req.method === 'POST') {
     const data = await body(req); const eligible = ['Arjun Mehta','Nisha Kapoor','Vikram Singh','Meera Iyer'];
@@ -90,6 +92,19 @@ const server = http.createServer(async (req,res) => {
   }
   if (url.pathname === '/api/camera/signals' && req.method === 'GET') {
     const roomId=url.searchParams.get('roomId'), clientId=url.searchParams.get('clientId'); const signals=(cameraRooms.get(roomId)||[]); const received=signals.filter(x=>x.from!==clientId); cameraRooms.set(roomId,signals.filter(x=>x.from===clientId)); return json(res,{signals:received});
+  }
+  if (url.pathname === '/api/mobile-cctv/room' && req.method === 'POST') {
+    const data=await body(req); const roomId=data.roomId || crypto.randomUUID().slice(0,10); if(!mobileCctvRooms.has(roomId)) mobileCctvRooms.set(roomId,[]); return json(res,{roomId});
+  }
+  if (url.pathname === '/api/mobile-cctv/signal' && req.method === 'POST') {
+    const data=await body(req); if(!data.roomId||!data.clientId||!data.signal) return json(res,{error:'Invalid mobile CCTV signal.'},400);
+    if(!mobileCctvRooms.has(data.roomId)) mobileCctvRooms.set(data.roomId,[]);
+    mobileCctvRooms.get(data.roomId).push({id:crypto.randomUUID(),from:data.clientId,target:data.target||null,signal:data.signal,createdAt:Date.now()}); return json(res,{ok:true});
+  }
+  if (url.pathname === '/api/mobile-cctv/signals' && req.method === 'GET') {
+    const roomId=url.searchParams.get('roomId'), clientId=url.searchParams.get('clientId'), queued=mobileCctvRooms.get(roomId)||[];
+    const received=queued.filter(item=>item.from!==clientId&&(!item.target||item.target===clientId)); const receivedIds=new Set(received.map(item=>item.id));
+    mobileCctvRooms.set(roomId,queued.filter(item=>!receivedIds.has(item.id)&&Date.now()-item.createdAt<600000)); return json(res,{signals:received});
   }
   let file = url.pathname === '/' ? 'public/index.html' : `public${decodeURIComponent(url.pathname)}`;
   file = path.resolve(file); const root = path.resolve('public');
