@@ -11,6 +11,10 @@ let sites = [
   { id:'P-2234', name:'Aasha Rehabilitation Centre', district:'Patna', state:'Bihar', scheme:'SMILE', risk:'High', score:53, camera:'Live', attendance:57, lastInspection:'02 Aug 2026' },
   { id:'P-1146', name:'Prerna Education Trust', district:'Kolkata', state:'West Bengal', scheme:'PM-DAKSH', risk:'Low', score:94, camera:'Live', attendance:93, lastInspection:'12 Aug 2026' }
 ];
+const indiaCoverage = [
+  ['Andhra Pradesh','Visakhapatnam'],['Arunachal Pradesh','Itanagar'],['Assam','Guwahati'],['Bihar','Patna'],['Chhattisgarh','Raipur'],['Goa','Panaji'],['Gujarat','Ahmedabad'],['Haryana','Gurugram'],['Himachal Pradesh','Shimla'],['Jharkhand','Ranchi'],['Karnataka','Bengaluru'],['Kerala','Thiruvananthapuram'],['Madhya Pradesh','Bhopal'],['Maharashtra','Mumbai'],['Manipur','Imphal'],['Meghalaya','Shillong'],['Mizoram','Aizawl'],['Nagaland','Kohima'],['Odisha','Bhubaneswar'],['Punjab','Ludhiana'],['Rajasthan','Jaipur'],['Sikkim','Gangtok'],['Tamil Nadu','Chennai'],['Telangana','Hyderabad'],['Tripura','Agartala'],['Uttar Pradesh','Lucknow'],['Uttarakhand','Dehradun'],['West Bengal','Kolkata'],['Andaman and Nicobar Islands','Port Blair'],['Chandigarh','Chandigarh'],['Dadra and Nagar Haveli and Daman and Diu','Daman'],['Delhi','New Delhi'],['Jammu and Kashmir','Srinagar'],['Ladakh','Leh'],['Lakshadweep','Kavaratti'],['Puducherry','Puducherry']
+];
+indiaCoverage.forEach(([state,district],index)=>{if(!sites.some(site=>site.state===state))sites.push({id:`P-${4000+index}`,name:`${district} Social Support Centre`,district,state,scheme:['SMILE','PM-DAKSH','NAMASTE'][index%3],risk:['Low','Medium','High'][index%3],score:72+(index%23),camera:index%5===0?'Offline':'Live',attendance:68+(index%29),lastInspection:`${(index%27)+1} Aug 2026`})});
 let inspections = [
   { id:'INSP-9082', site:'Udaan Skill Centre', inspector:'Arjun Mehta', due:'Today, 15:30', status:'Assigned', priority:'High' },
   { id:'INSP-9074', site:'Aasha Rehabilitation Centre', inspector:'Nisha Kapoor', due:'Today, 17:00', status:'In progress', priority:'High' },
