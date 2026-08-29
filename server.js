@@ -71,7 +71,11 @@ const server = http.createServer(async (req,res) => {
   if (url.pathname === '/api/assign' && req.method === 'POST') {
     const data = await body(req); const eligible = ['Arjun Mehta','Nisha Kapoor','Vikram Singh','Meera Iyer'];
     const assigned = eligible[Math.floor(Math.random()*eligible.length)];
-    const target = sites.find(s=>s.id===data.siteId) || sites[0];
+    const riskOrder={High:0,Medium:1,Low:2}; const availableSites=sites.filter(s=>!s.inspectionAssigned);
+    const target = data.siteId ? sites.find(s=>s.id===data.siteId) : availableSites.sort((a,b)=>riskOrder[a.risk]-riskOrder[b.risk])[0];
+    if(!target) return json(res,{error:'No unassigned projects are currently available for inspection.'},409);
+    if(target.inspectionAssigned) return json(res,{error:'This project has already been assigned for inspection.'},409);
+    target.inspectionAssigned=true;
     const job = {id:'INSP-'+Math.floor(9000+Math.random()*999), site:target.name, inspector:assigned, due:'Within 24 hours', status:'Assigned', priority:target.risk};
     inspections.unshift(job); alerts.unshift({id:'AL-'+Math.floor(200+Math.random()*99),type:'Inspection assigned',site:target.name,text:`Randomized assignment created for ${assigned}.`,severity:'info',time:'Just now'});
     return json(res, job, 201);
