@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Saarthi Monitoring</string>
+    <string name="title_activity_main">Saarthi Monitoring</string>
+    <string name="package_name">in.gov.dosje.saarthi</string>
+    <string name="custom_url_scheme">in.gov.dosje.saarthi</string>
+</resources>

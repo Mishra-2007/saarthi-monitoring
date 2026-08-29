@@ -1,5 +1,6 @@
 # Local runtime and editor files
 node_modules/
+.pnpm-store/
 .env
 .env.*
 npm-debug.log*
@@ -7,3 +8,10 @@ npm-debug.log*
 # Project scratch files
 work/
 outputs/
+sarthi.zip
+
+# Android local/build output
+android/.gradle/
+android/local.properties
+android/build/
+android/app/build/
