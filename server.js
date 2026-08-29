@@ -23,6 +23,7 @@ let alerts = [
 ];
 let reports = [];
 let feedback = [];
+const cameraRooms = new Map();
 const employees = [{id:'GOV-2026-1001',name:'Arjun Mehta',email:'arjun.mehta@dosje.gov.in',password:'Saarthi@2026',role:'PMU Inspector',verified:true}];
 const pendingVerifications = new Map();
 const sessions = new Map();
@@ -76,6 +77,15 @@ const server = http.createServer(async (req,res) => {
   }
   if (url.pathname === '/api/vc' && req.method === 'POST') {
     const data = await body(req); const alert={id:'AL-'+Math.floor(400+Math.random()*99),type:'VC verification initiated',site:data.site,text:`Secure surprise VC request sent to ${data.contact||'project staff'}.`,severity:'info',time:'Just now'}; alerts.unshift(alert); return json(res, alert, 201);
+  }
+  if (url.pathname === '/api/camera/room' && req.method === 'POST') {
+    const data=await body(req); const roomId=data.roomId || crypto.randomUUID().slice(0,8); if(!cameraRooms.has(roomId)) cameraRooms.set(roomId,[]); return json(res,{roomId});
+  }
+  if (url.pathname === '/api/camera/signal' && req.method === 'POST') {
+    const data=await body(req); if(!data.roomId||!data.clientId||!data.signal) return json(res,{error:'Invalid camera signal.'},400); if(!cameraRooms.has(data.roomId)) cameraRooms.set(data.roomId,[]); cameraRooms.get(data.roomId).push({from:data.clientId,signal:data.signal}); return json(res,{ok:true});
+  }
+  if (url.pathname === '/api/camera/signals' && req.method === 'GET') {
+    const roomId=url.searchParams.get('roomId'), clientId=url.searchParams.get('clientId'); const signals=(cameraRooms.get(roomId)||[]); const received=signals.filter(x=>x.from!==clientId); cameraRooms.set(roomId,signals.filter(x=>x.from===clientId)); return json(res,{signals:received});
   }
   let file = url.pathname === '/' ? 'public/index.html' : `public${decodeURIComponent(url.pathname)}`;
   file = path.resolve(file); const root = path.resolve('public');
