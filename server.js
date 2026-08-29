@@ -29,6 +29,12 @@ let reports = [];
 let feedback = [];
 const cameraRooms = new Map();
 const mobileCctvRooms = new Map();
+const inspectorRoster = [
+  {name:'Arjun Mehta',states:['Uttar Pradesh','Uttarakhand','Delhi','Haryana'],workload:2,conflicts:[]},
+  {name:'Nisha Kapoor',states:['Rajasthan','Gujarat','Madhya Pradesh','Maharashtra','Goa'],workload:1,conflicts:[]},
+  {name:'Vikram Singh',states:['Bihar','Jharkhand','West Bengal','Odisha','Assam','Sikkim'],workload:2,conflicts:[]},
+  {name:'Meera Iyer',states:['Tamil Nadu','Kerala','Karnataka','Telangana','Andhra Pradesh','Puducherry'],workload:1,conflicts:[]}
+];
 const employees = [{id:'GOV-2026-1001',name:'Arjun Mehta',email:'arjun.mehta@dosje.gov.in',password:'Saarthi@2026',role:'PMU Inspector',verified:true}];
 const pendingVerifications = new Map();
 const sessions = new Map();
@@ -69,15 +75,21 @@ const server = http.createServer(async (req,res) => {
   if (url.pathname.startsWith('/api/') && !publicCameraEndpoint && !sessionUser(req)) return json(res,{error:'Authentication required.'},401);
   if (url.pathname === '/api/dashboard') return json(res, { sites, inspections, alerts, reports, stats:{ monitored:128, live:116, inspections:18, compliance:87 } });
   if (url.pathname === '/api/assign' && req.method === 'POST') {
-    const data = await body(req); const eligible = ['Arjun Mehta','Nisha Kapoor','Vikram Singh','Meera Iyer'];
-    const assigned = eligible[Math.floor(Math.random()*eligible.length)];
+    const data = await body(req);
     const riskOrder={High:0,Medium:1,Low:2}; const availableSites=sites.filter(s=>!s.inspectionAssigned);
     const target = data.siteId ? sites.find(s=>s.id===data.siteId) : availableSites.sort((a,b)=>riskOrder[a.risk]-riskOrder[b.risk])[0];
     if(!target) return json(res,{error:'No unassigned projects are currently available for inspection.'},409);
     if(target.inspectionAssigned) return json(res,{error:'This project has already been assigned for inspection.'},409);
+    const conflictFree=inspectorRoster.filter(inspector=>!inspector.conflicts.includes(target.id));
+    const stateEligible=conflictFree.filter(inspector=>inspector.states.includes(target.state));
+    const candidatePool=stateEligible.length?stateEligible:conflictFree;
+    const lowestWorkload=Math.min(...candidatePool.map(inspector=>inspector.workload));
+    const balancedCandidates=candidatePool.filter(inspector=>inspector.workload===lowestWorkload);
+    const inspector=balancedCandidates[Math.floor(Math.random()*balancedCandidates.length)];
+    inspector.workload+=1;
     target.inspectionAssigned=true;
-    const job = {id:'INSP-'+Math.floor(9000+Math.random()*999), site:target.name, inspector:assigned, due:'Within 24 hours', status:'Assigned', priority:target.risk};
-    inspections.unshift(job); alerts.unshift({id:'AL-'+Math.floor(200+Math.random()*99),type:'Inspection assigned',site:target.name,text:`Randomized assignment created for ${assigned}.`,severity:'info',time:'Just now'});
+    const job = {id:'INSP-'+Math.floor(9000+Math.random()*999), site:target.name, inspector:inspector.name, due:'Within 24 hours', status:'Assigned', priority:target.risk, assignmentBasis:stateEligible.length?'State coverage + lowest workload':'Lowest workload + randomized tie-break'};
+    inspections.unshift(job); alerts.unshift({id:'AL-'+Math.floor(200+Math.random()*99),type:'Inspection auto-assigned',site:target.name,text:`Assigned to ${inspector.name} using eligibility and workload rules.`,severity:'info',time:'Just now'});
     return json(res, job, 201);
   }
   if (url.pathname === '/api/reports' && req.method === 'POST') {
