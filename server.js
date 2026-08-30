@@ -125,6 +125,6 @@ const server = http.createServer(async (req,res) => {
   let file = url.pathname === '/' ? 'public/index.html' : `public${decodeURIComponent(url.pathname)}`;
   file = path.resolve(file); const root = path.resolve('public');
   if (!file.startsWith(root)) return json(res,{error:'Forbidden'},403);
-  fs.readFile(file, (err, content) => { if (err) return json(res,{error:'Not found'},404); const ext=path.extname(file); const types={'.html':'text/html','.css':'text/css','.js':'application/javascript','.svg':'image/svg+xml','.webmanifest':'application/manifest+json'}; res.writeHead(200,{'Content-Type':types[ext]||'application/octet-stream'}); res.end(content); });
+  fs.readFile(file, (err, content) => { if (err) return json(res,{error:'Not found'},404); const ext=path.extname(file); const types={'.html':'text/html','.css':'text/css','.js':'application/javascript','.svg':'image/svg+xml','.png':'image/png','.webmanifest':'application/manifest+json'}; res.writeHead(200,{'Content-Type':types[ext]||'application/octet-stream'}); res.end(content); });
 });
 server.listen(PORT, () => console.log(`Saarthi is running at http://localhost:${PORT}`));
