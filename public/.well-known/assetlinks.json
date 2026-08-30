@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "in.gov.dosje.saarthi",
+      "sha256_cert_fingerprints": ["5F:F8:2F:4C:8E:11:37:F9:92:4E:6D:02:CF:AD:2A:DF:59:D4:23:01:8E:60:8F:D3:42:3F:20:29:B4:FB:E5:15"]
+    }
+  }
+]
