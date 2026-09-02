@@ -103,7 +103,7 @@ const server = http.createServer(async (req,res) => {
     }
     inspector.workload+=1;
     target.inspectionAssigned=true;
-    const job = {id:'INSP-'+Math.floor(9000+Math.random()*999), site:target.name, inspector:inspector.name, due:data.due||'Within 24 hours', status:'Assigned', priority:data.priority||target.risk, notes:data.notes||'', assignmentBasis};
+    const job = {id:'INSP-'+Math.floor(9000+Math.random()*999), site:target.name, inspector:inspector.name, due:data.due||'Within 24 hours', status:'Assigned', priority:data.priority||target.risk, notes:data.notes||'', finding:data.finding||'', evidence:data.evidence||'', location:data.location||'', assignmentBasis};
     inspections.unshift(job); alerts.unshift({id:'AL-'+Math.floor(200+Math.random()*99),type:'Inspection assigned',site:target.name,text:`Assigned to ${inspector.name}: ${assignmentBasis}.`,severity:'info',time:'Just now'});
     return json(res, job, 201);
   }
