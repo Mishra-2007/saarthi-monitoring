@@ -44,6 +44,13 @@ const sessionUser = req => { const token=(req.headers.authorization||'').replace
 
 const server = http.createServer(async (req,res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
+  const origin=req.headers.origin||'';
+  if(['https://saarthi-monitoring.onrender.com','capacitor://localhost','http://localhost'].includes(origin)){
+    res.setHeader('Access-Control-Allow-Origin',origin);
+    res.setHeader('Access-Control-Allow-Headers','Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');
+  }
+  if(req.method==='OPTIONS'){res.writeHead(204);return res.end()}
   if (url.pathname === '/api/auth/signup' && req.method === 'POST') {
     const data=await body(req); const email=String(data.email||'').toLowerCase(); const employeeId=String(data.employeeId||'').toUpperCase();
     if(!/^GOV-\d{4}-\d{4,}$/.test(employeeId)) return json(res,{error:'Use a valid Government Employee ID (for example GOV-2026-1001).'},400);
@@ -73,7 +80,7 @@ const server = http.createServer(async (req,res) => {
   }
   const publicCameraEndpoint=['/api/mobile-cctv/room','/api/mobile-cctv/signal','/api/mobile-cctv/signals'].includes(url.pathname);
   if (url.pathname.startsWith('/api/') && !publicCameraEndpoint && !sessionUser(req)) return json(res,{error:'Authentication required.'},401);
-  if (url.pathname === '/api/dashboard') return json(res, { sites, inspections, alerts, reports, stats:{ monitored:128, live:116, inspections:18, compliance:87 } });
+  if (url.pathname === '/api/dashboard') return json(res, { sites, inspections, alerts, reports, inspectors:inspectorRoster.map(({name,workload})=>({name,workload,role:'PMU Inspector'})), stats:{ monitored:128, live:116, inspections:18, compliance:87 } });
   if (url.pathname === '/api/assign' && req.method === 'POST') {
     const data = await body(req);
     const riskOrder={High:0,Medium:1,Low:2}; const availableSites=sites.filter(s=>!s.inspectionAssigned);
@@ -81,15 +88,23 @@ const server = http.createServer(async (req,res) => {
     if(!target) return json(res,{error:'No unassigned projects are currently available for inspection.'},409);
     if(target.inspectionAssigned) return json(res,{error:'This project has already been assigned for inspection.'},409);
     const conflictFree=inspectorRoster.filter(inspector=>!inspector.conflicts.includes(target.id));
-    const stateEligible=conflictFree.filter(inspector=>inspector.states.includes(target.state));
-    const candidatePool=stateEligible.length?stateEligible:conflictFree;
-    const lowestWorkload=Math.min(...candidatePool.map(inspector=>inspector.workload));
-    const balancedCandidates=candidatePool.filter(inspector=>inspector.workload===lowestWorkload);
-    const inspector=balancedCandidates[Math.floor(Math.random()*balancedCandidates.length)];
+    let inspector,assignmentBasis;
+    if(data.inspectorName){
+      inspector=conflictFree.find(person=>person.name===data.inspectorName);
+      if(!inspector)return json(res,{error:'Selected inspector is unavailable or has a conflict for this project.'},400);
+      assignmentBasis='Specific inspector selected by authorised official';
+    }else{
+      const stateEligible=conflictFree.filter(person=>person.states.includes(target.state));
+      const candidatePool=stateEligible.length?stateEligible:conflictFree;
+      const lowestWorkload=Math.min(...candidatePool.map(person=>person.workload));
+      const balancedCandidates=candidatePool.filter(person=>person.workload===lowestWorkload);
+      inspector=balancedCandidates[Math.floor(Math.random()*balancedCandidates.length)];
+      assignmentBasis=stateEligible.length?'State coverage + lowest workload + randomized tie-break':'Lowest workload + randomized tie-break';
+    }
     inspector.workload+=1;
     target.inspectionAssigned=true;
-    const job = {id:'INSP-'+Math.floor(9000+Math.random()*999), site:target.name, inspector:inspector.name, due:'Within 24 hours', status:'Assigned', priority:target.risk, assignmentBasis:stateEligible.length?'State coverage + lowest workload':'Lowest workload + randomized tie-break'};
-    inspections.unshift(job); alerts.unshift({id:'AL-'+Math.floor(200+Math.random()*99),type:'Inspection auto-assigned',site:target.name,text:`Assigned to ${inspector.name} using eligibility and workload rules.`,severity:'info',time:'Just now'});
+    const job = {id:'INSP-'+Math.floor(9000+Math.random()*999), site:target.name, inspector:inspector.name, due:data.due||'Within 24 hours', status:'Assigned', priority:data.priority||target.risk, notes:data.notes||'', assignmentBasis};
+    inspections.unshift(job); alerts.unshift({id:'AL-'+Math.floor(200+Math.random()*99),type:'Inspection assigned',site:target.name,text:`Assigned to ${inspector.name}: ${assignmentBasis}.`,severity:'info',time:'Just now'});
     return json(res, job, 201);
   }
   if (url.pathname === '/api/reports' && req.method === 'POST') {

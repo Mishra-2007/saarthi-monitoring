@@ -1,4 +1,4 @@
-const CACHE_NAME = 'saarthi-shell-v1';
+const CACHE_NAME = 'saarthi-shell-v2';
 const APP_SHELL = ['/', '/styles.css', '/app.js', '/manifest.webmanifest', '/icons/saarthi-icon.svg'];
 
 self.addEventListener('install', event => {
@@ -13,9 +13,12 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+  const requestUrl = new URL(event.request.url);
+  // Live APIs, CCTV signalling and maps must always reach the network.
+  if (requestUrl.pathname.startsWith('/api/') || requestUrl.hostname.includes('openstreetmap.org')) return;
   event.respondWith(fetch(event.request).then(response => {
     const copy = response.clone();
-    if (new URL(event.request.url).origin === self.location.origin && response.ok) {
+    if (requestUrl.origin === self.location.origin && response.ok) {
       caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
     }
     return response;
