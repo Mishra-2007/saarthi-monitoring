@@ -5,7 +5,7 @@ const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
 let sites = [
-  { id:'P-2041', name:'Udaan Skill Centre (sample)', district:'Lucknow', state:'Uttar Pradesh', scheme:'SMILE', risk:'High', score:58, camera:'Live', attendance:62, lastInspection:'14 Aug 2026', lat:26.8467, lng:80.9462, inspectionAssigned:false, owner:'Demo record' }
+  { id:'P-2041', name:'Udaan Skill Centre (sample)', district:'Lucknow', state:'Uttar Pradesh', scheme:'SMILE', risk:'High', score:58, camera:'Live', attendance:62, lastInspection:'14 Aug 2026', lat:26.8467, lng:80.9462, inspectionAssigned:false, owner:'NGO/2026/1001' }
 ];
 let inspections = [];
 let alerts = [
@@ -24,7 +24,7 @@ const inspectorRoster = [
 ];
 const employees = [{id:'GOV-2026-1001',name:'Arjun Mehta',email:'arjun.mehta@dosje.gov.in',password:'Saarthi@2026',role:'PMU Inspector',verified:true}];
 const pendingVerifications = new Map();
-const partnerAccounts = [];
+const partnerAccounts = [{organisation:'Udaan Skill Centre',registrationId:'NGO/2026/1001',email:'udan@dosje-demo.org',password:'Saarthi@2026',role:'Project / NGO Administrator'}];
 const pendingPartnerVerifications = new Map();
 const sessions = new Map();
 const json = (res, data, status=200) => { res.writeHead(status, {'Content-Type':'application/json'}); res.end(JSON.stringify(data)); };
@@ -101,6 +101,14 @@ const server = http.createServer(async (req,res) => {
     const user=sessionUser(req); if(user?.role!=='Project / NGO Administrator') return json(res,{error:'Organisation access required.'},403);
     return json(res,{projects:sites.filter(site=>site.owner===user.registrationId)});
   }
+  if (url.pathname === '/api/partner/dashboard' && req.method === 'GET') {
+    const user=sessionUser(req); if(user?.role!=='Project / NGO Administrator') return json(res,{error:'Organisation access required.'},403);
+    const projects=sites.filter(site=>site.owner===user.registrationId), projectNames=new Set(projects.map(site=>site.name));
+    const projectInspections=inspections.filter(item=>projectNames.has(item.site));
+    const projectReports=reports.filter(item=>projectNames.has(item.site));
+    const projectAlerts=alerts.filter(item=>projectNames.has(item.site));
+    return json(res,{projects,inspections:projectInspections,reports:projectReports,alerts:projectAlerts,stats:{projects:projects.length,activeInspections:projectInspections.filter(item=>item.status!=='Completed').length,reports:projectReports.length}});
+  }
   if (url.pathname === '/api/partner/projects' && req.method === 'POST') {
     const user=sessionUser(req); if(user?.role!=='Project / NGO Administrator') return json(res,{error:'Organisation access required.'},403);
     const data=await body(req); const name=String(data.name||'').trim(), state=String(data.state||'').trim(), district=String(data.district||'').trim();
@@ -136,9 +144,19 @@ const server = http.createServer(async (req,res) => {
     inspections.unshift(job); alerts.unshift({id:'AL-'+Math.floor(200+Math.random()*99),type:'Inspection assigned',site:target.name,text:`Assigned to ${inspector.name}: ${assignmentBasis}.`,severity:'info',time:'Just now'});
     return json(res, job, 201);
   }
+  if (url.pathname === '/api/inspections/start' && req.method === 'POST') {
+    const user=sessionUser(req); if(user?.role==='Project / NGO Administrator') return json(res,{error:'Only authorised officials can start an inspection.'},403);
+    const data=await body(req), job=inspections.find(item=>item.id===data.inspectionId);
+    if(!job) return json(res,{error:'Inspection not found.'},404);
+    if(job.status==='Completed') return json(res,{error:'This inspection is already completed.'},409);
+    job.status='In progress'; job.startedAt=new Date().toISOString();
+    alerts.unshift({id:'AL-'+Math.floor(700+Math.random()*299),type:'On-ground inspection started',site:job.site,text:`${job.inspector} has started the on-ground inspection.`,severity:'info',time:'Just now'});
+    return json(res,{inspection:job});
+  }
   if (url.pathname === '/api/reports' && req.method === 'POST') {
-    const data = await body(req); const report = {id:'RPT-'+crypto.randomUUID().slice(0,6).toUpperCase(), ...data, submittedAt:new Date().toISOString(), status:'Under review'};
-    reports.unshift(report); alerts.unshift({id:'AL-'+Math.floor(300+Math.random()*99),type:'Report received',site:data.site,text:'Geo-tagged inspection report submitted for review.',severity:'info',time:'Just now'});
+    const data = await body(req); const report = {id:'RPT-'+crypto.randomUUID().slice(0,6).toUpperCase(), ...data, submittedAt:new Date().toISOString(), status:'Submitted for review'};
+    const job=inspections.find(item=>item.site===data.site&&item.status!=='Completed'); if(job){job.status='Completed';job.completedAt=report.submittedAt;job.reportId=report.id;}
+    reports.unshift(report); alerts.unshift({id:'AL-'+Math.floor(300+Math.random()*99),type:'Inspection report submitted',site:data.site,text:'The on-ground inspection report is ready for organisation review.',severity:'info',time:'Just now'});
     return json(res, report, 201);
   }
   if (url.pathname === '/api/vc' && req.method === 'POST') {
