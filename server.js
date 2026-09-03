@@ -5,25 +5,11 @@ const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
 let sites = [
-  { id:'P-2041', name:'Udaan Skill Centre', district:'Lucknow', state:'Uttar Pradesh', scheme:'SMILE', risk:'High', score:58, camera:'Live', attendance:62, lastInspection:'14 Aug 2026',lat:26.8467,lng:80.9462 },
-  { id:'P-1872', name:'Saksham Residential Institute', district:'Jaipur', state:'Rajasthan', scheme:'PM-DAKSH', risk:'Medium', score:76, camera:'Live', attendance:84, lastInspection:'09 Aug 2026',lat:26.9124,lng:75.7873 },
-  { id:'P-3108', name:'Nayi Disha Foundation', district:'Bhopal', state:'Madhya Pradesh', scheme:'NAMASTE', risk:'Low', score:91, camera:'Offline', attendance:89, lastInspection:'18 Aug 2026',lat:23.2599,lng:77.4126 },
-  { id:'P-2234', name:'Aasha Rehabilitation Centre', district:'Patna', state:'Bihar', scheme:'SMILE', risk:'High', score:53, camera:'Live', attendance:57, lastInspection:'02 Aug 2026',lat:25.5941,lng:85.1376 },
-  { id:'P-1146', name:'Prerna Education Trust', district:'Kolkata', state:'West Bengal', scheme:'PM-DAKSH', risk:'Low', score:94, camera:'Live', attendance:93, lastInspection:'12 Aug 2026',lat:22.5726,lng:88.3639 }
+  { id:'P-2041', name:'Udaan Skill Centre (sample)', district:'Lucknow', state:'Uttar Pradesh', scheme:'SMILE', risk:'High', score:58, camera:'Live', attendance:62, lastInspection:'14 Aug 2026', lat:26.8467, lng:80.9462, inspectionAssigned:false, owner:'Demo record' }
 ];
-const indiaCoverage = [
-  ['Andhra Pradesh','Visakhapatnam',17.6868,83.2185],['Arunachal Pradesh','Itanagar',27.0844,93.6053],['Assam','Guwahati',26.1445,91.7362],['Bihar','Patna',25.5941,85.1376],['Chhattisgarh','Raipur',21.2514,81.6296],['Goa','Panaji',15.4909,73.8278],['Gujarat','Ahmedabad',23.0225,72.5714],['Haryana','Gurugram',28.4595,77.0266],['Himachal Pradesh','Shimla',31.1048,77.1734],['Jharkhand','Ranchi',23.3441,85.3096],['Karnataka','Bengaluru',12.9716,77.5946],['Kerala','Thiruvananthapuram',8.5241,76.9366],['Madhya Pradesh','Bhopal',23.2599,77.4126],['Maharashtra','Mumbai',19.076,72.8777],['Manipur','Imphal',24.817,93.9368],['Meghalaya','Shillong',25.5788,91.8933],['Mizoram','Aizawl',23.7271,92.7176],['Nagaland','Kohima',25.6751,94.1086],['Odisha','Bhubaneswar',20.2961,85.8245],['Punjab','Ludhiana',30.901,75.8573],['Rajasthan','Jaipur',26.9124,75.7873],['Sikkim','Gangtok',27.3389,88.6065],['Tamil Nadu','Chennai',13.0827,80.2707],['Telangana','Hyderabad',17.385,78.4867],['Tripura','Agartala',23.8315,91.2868],['Uttar Pradesh','Lucknow',26.8467,80.9462],['Uttarakhand','Dehradun',30.3165,78.0322],['West Bengal','Kolkata',22.5726,88.3639],['Andaman and Nicobar Islands','Port Blair',11.6234,92.7265],['Chandigarh','Chandigarh',30.7333,76.7794],['Dadra and Nagar Haveli and Daman and Diu','Daman',20.3974,72.8328],['Delhi','New Delhi',28.6139,77.209],['Jammu and Kashmir','Srinagar',34.0837,74.7973],['Ladakh','Leh',34.1526,77.5771],['Lakshadweep','Kavaratti',10.5667,72.642],['Puducherry','Puducherry',11.9416,79.8083]
-];
-indiaCoverage.forEach(([state,district,lat,lng],index)=>{if(!sites.some(site=>site.state===state))sites.push({id:`P-${4000+index}`,name:`${district} Social Support Centre`,district,state,scheme:['SMILE','PM-DAKSH','NAMASTE'][index%3],risk:['Low','Medium','High'][index%3],score:72+(index%23),camera:index%5===0?'Offline':'Live',attendance:68+(index%29),lastInspection:`${(index%27)+1} Aug 2026`,lat,lng})});
-let inspections = [
-  { id:'INSP-9082', site:'Udaan Skill Centre', inspector:'Arjun Mehta', due:'Today, 15:30', status:'Assigned', priority:'High' },
-  { id:'INSP-9074', site:'Aasha Rehabilitation Centre', inspector:'Nisha Kapoor', due:'Today, 17:00', status:'In progress', priority:'High' },
-  { id:'INSP-9061', site:'Saksham Residential Institute', inspector:'Vikram Singh', due:'23 Aug, 10:00', status:'Scheduled', priority:'Medium' }
-];
+let inspections = [];
 let alerts = [
-  { id:'AL-102', type:'Attendance anomaly', site:'Udaan Skill Centre', text:'Attendance dropped 27% from weekly baseline.', severity:'critical', time:'8 min ago' },
-  { id:'AL-101', type:'CCTV offline', site:'Nayi Disha Foundation', text:'Camera 02 has been unavailable for 41 minutes.', severity:'warning', time:'22 min ago' },
-  { id:'AL-100', type:'Evidence review', site:'Aasha Rehabilitation Centre', text:'Potentially duplicate image detected in last report.', severity:'warning', time:'1 hr ago' }
+  { id:'AL-102', type:'Attendance anomaly', site:'Udaan Skill Centre (sample)', text:'Sample alert: attendance needs human review.', severity:'warning', time:'Demo' }
 ];
 let reports = [];
 let feedback = [];
@@ -38,10 +24,17 @@ const inspectorRoster = [
 ];
 const employees = [{id:'GOV-2026-1001',name:'Arjun Mehta',email:'arjun.mehta@dosje.gov.in',password:'Saarthi@2026',role:'PMU Inspector',verified:true}];
 const pendingVerifications = new Map();
+const partnerAccounts = [];
+const pendingPartnerVerifications = new Map();
 const sessions = new Map();
 const json = (res, data, status=200) => { res.writeHead(status, {'Content-Type':'application/json'}); res.end(JSON.stringify(data)); };
 const body = req => new Promise(resolve => { let raw=''; req.on('data', c => raw+=c); req.on('end', () => { try { resolve(JSON.parse(raw||'{}')); } catch { resolve({}); } }); });
 const sessionUser = req => { const token=(req.headers.authorization||'').replace('Bearer ',''); return sessions.get(token); };
+const dashboardStats = () => {
+  const monitored=sites.length, live=sites.filter(site=>site.camera==='Live').length;
+  const compliance=monitored?Math.round(sites.reduce((sum,site)=>sum+Number(site.score||0),0)/monitored):0;
+  return {monitored,live,inspections:inspections.filter(item=>item.status!=='Completed').length,compliance};
+};
 
 const server = http.createServer(async (req,res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -72,6 +65,28 @@ const server = http.createServer(async (req,res) => {
     if(!user) return json(res,{error:'Employee ID/email or password is incorrect.'},401);
     const token=crypto.randomUUID(); sessions.set(token,user); return json(res,{token,user:{name:user.name,employeeId:user.id,role:user.role}});
   }
+  if (url.pathname === '/api/partner/signup' && req.method === 'POST') {
+    const data=await body(req); const email=String(data.email||'').trim().toLowerCase(); const registrationId=String(data.registrationId||'').trim().toUpperCase();
+    if(!String(data.organisation||'').trim()) return json(res,{error:'Enter the registered NGO, institute or project name.'},400);
+    if(!/^[A-Z0-9][A-Z0-9/-]{4,}$/.test(registrationId)) return json(res,{error:'Enter a valid DoSJE registration ID.'},400);
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json(res,{error:'Enter a valid organisation email address.'},400);
+    if(String(data.password||'').length<8) return json(res,{error:'Password must contain at least 8 characters.'},400);
+    if(partnerAccounts.some(account=>account.email===email||account.registrationId===registrationId)) return json(res,{error:'This organisation already has an account. Please sign in.'},409);
+    pendingPartnerVerifications.set(email,{organisation:String(data.organisation).trim(),registrationId,email,password:data.password,role:'Project / NGO Administrator'});
+    return json(res,{verificationRequired:true,demoCode:'123456',message:'Verification code sent to your registered organisation email.'});
+  }
+  if (url.pathname === '/api/partner/verify' && req.method === 'POST') {
+    const data=await body(req); const account=pendingPartnerVerifications.get(String(data.email||'').toLowerCase());
+    if(!account||data.code!=='123456') return json(res,{error:'Invalid or expired verification code.'},400);
+    partnerAccounts.push(account); pendingPartnerVerifications.delete(account.email);
+    const token=crypto.randomUUID(); sessions.set(token,account); return json(res,{token,user:{name:account.organisation,registrationId:account.registrationId,role:account.role}});
+  }
+  if (url.pathname === '/api/partner/login' && req.method === 'POST') {
+    const data=await body(req); const identifier=String(data.identifier||'').trim().toLowerCase();
+    const account=partnerAccounts.find(item=>(item.email===identifier||item.registrationId.toLowerCase()===identifier)&&item.password===data.password);
+    if(!account) return json(res,{error:'Organisation ID/email or password is incorrect.'},401);
+    const token=crypto.randomUUID(); sessions.set(token,account); return json(res,{token,user:{name:account.organisation,registrationId:account.registrationId,role:account.role}});
+  }
   if (url.pathname === '/api/auth/logout' && req.method === 'POST') { sessions.delete((req.headers.authorization||'').replace('Bearer ','')); return json(res,{ok:true}); }
   if (url.pathname === '/api/feedback' && req.method === 'POST') {
     const data=await body(req); if(!data.category||!data.message) return json(res,{error:'Please select a grievance category and describe the issue.'},400);
@@ -81,7 +96,20 @@ const server = http.createServer(async (req,res) => {
   }
   const publicCameraEndpoint=['/api/mobile-cctv/room','/api/mobile-cctv/signal','/api/mobile-cctv/signals','/api/mobile-cctv/frame'].includes(url.pathname);
   if (url.pathname.startsWith('/api/') && !publicCameraEndpoint && !sessionUser(req)) return json(res,{error:'Authentication required.'},401);
-  if (url.pathname === '/api/dashboard') return json(res, { sites, inspections, alerts, reports, inspectors:inspectorRoster.map(({name,workload})=>({name,workload,role:'PMU Inspector'})), stats:{ monitored:128, live:116, inspections:18, compliance:87 } });
+  if (url.pathname === '/api/dashboard') return json(res, { sites, inspections, alerts, reports, inspectors:inspectorRoster.map(({name,workload})=>({name,workload,role:'PMU Inspector'})), stats:dashboardStats() });
+  if (url.pathname === '/api/partner/projects' && req.method === 'GET') {
+    const user=sessionUser(req); if(user?.role!=='Project / NGO Administrator') return json(res,{error:'Organisation access required.'},403);
+    return json(res,{projects:sites.filter(site=>site.owner===user.registrationId)});
+  }
+  if (url.pathname === '/api/partner/projects' && req.method === 'POST') {
+    const user=sessionUser(req); if(user?.role!=='Project / NGO Administrator') return json(res,{error:'Organisation access required.'},403);
+    const data=await body(req); const name=String(data.name||'').trim(), state=String(data.state||'').trim(), district=String(data.district||'').trim();
+    if(!name||!state||!district||!String(data.scheme||'').trim()) return json(res,{error:'Project name, scheme, State/UT and district are required.'},400);
+    const lat=Number(data.lat),lng=Number(data.lng); const hasCoordinates=Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180;
+    const project={id:'P-'+Math.floor(100000+Math.random()*899999),name,district,state,scheme:String(data.scheme).trim(),risk:'Pending review',score:0,camera:'Not connected',attendance:0,lastInspection:'Not yet inspected',lat:hasCoordinates?lat:20.5937,lng:hasCoordinates?lng:78.9629,inspectionAssigned:false,owner:user.registrationId,createdAt:new Date().toISOString()};
+    sites.unshift(project); alerts.unshift({id:'AL-'+Math.floor(500+Math.random()*499),type:'Project registered',site:project.name,text:`Added by ${user.organisation}; awaiting DoSJE review.`,severity:'info',time:'Just now'});
+    return json(res,{project},201);
+  }
   if (url.pathname === '/api/assign' && req.method === 'POST') {
     const data = await body(req);
     const riskOrder={High:0,Medium:1,Low:2}; const availableSites=sites.filter(s=>!s.inspectionAssigned);
