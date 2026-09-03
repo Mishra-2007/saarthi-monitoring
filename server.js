@@ -28,8 +28,13 @@ const partnerAccounts = [{organisation:'Udaan Skill Centre',registrationId:'NGO/
 const pendingPartnerVerifications = new Map();
 const sessions = new Map();
 const json = (res, data, status=200) => { res.writeHead(status, {'Content-Type':'application/json'}); res.end(JSON.stringify(data)); };
-const body = req => new Promise(resolve => { let raw=''; req.on('data', c => raw+=c); req.on('end', () => { try { resolve(JSON.parse(raw||'{}')); } catch { resolve({}); } }); });
+const body = req => new Promise(resolve => { let raw='',size=0; req.on('data', c => {size+=c.length;if(size<=5_500_000)raw+=c}); req.on('end', () => { if(size>5_500_000)return resolve({__tooLarge:true});try { resolve(JSON.parse(raw||'{}')); } catch { resolve({}); } }); });
 const sessionUser = req => { const token=(req.headers.authorization||'').replace('Bearer ',''); return sessions.get(token); };
+const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
+const parseCoordinates = value => {const match=String(value||'').match(/(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);return match?[Number(match[1]),Number(match[2])]:null};
+const metersBetween = (a,b) => {const r=6371000,toRad=x=>x*Math.PI/180,dLat=toRad(b[0]-a[0]),dLng=toRad(b[1]-a[1]);const q=Math.sin(dLat/2)**2+Math.cos(toRad(a[0]))*Math.cos(toRad(b[0]))*Math.sin(dLng/2)**2;return 2*r*Math.asin(Math.sqrt(q))};
+const storedEvidence = evidence => {if(!evidence)return null;const type=String(evidence.type||'');const data=String(evidence.data||'');if(!/^((image|audio|video)\/[\w.+-]+)$/.test(type)||!data.startsWith(`data:${type};base64,`)||data.length>4_000_000)return {error:'Attach one image, video, or audio file up to 3 MB.'};const payload=data.split(',')[1]||'',serverHash=sha256(Buffer.from(payload,'base64'));if(evidence.clientHash&&evidence.clientHash!==serverHash)return {error:'Evidence integrity check failed. Please capture the file again.'};return {id:'EVD-'+crypto.randomUUID().slice(0,8).toUpperCase(),name:String(evidence.name||'Evidence').slice(0,120),type,data,clientHash:evidence.clientHash||null,serverHash,integrity:'SHA-256 verified on server upload',deviceCapturedAt:String(evidence.capturedAt||''),serverReceivedAt:new Date().toISOString()};};
+const evidenceRules = (data,site,inspector,now) => {const flags=[],coords=parseCoordinates(data.location),registered=[site.lat,site.lng];if(coords&&Number.isFinite(site.lat)&&metersBetween(coords,registered)>100)flags.push('Geo-fence mismatch: evidence is more than 100 m from the registered project location.');const minutes=now.getUTCHours()*60+now.getUTCMinutes()+330;if(minutes<8*60||minutes>20*60)flags.push('Working-hours inconsistency: evidence was uploaded outside the 08:00–20:00 IST inspection window.');const prior=reports.find(report=>report.inspector===inspector&&parseCoordinates(report.location)&&Math.abs(now-new Date(report.submittedAt))<10*60*1000);if(prior&&coords&&metersBetween(coords,parseCoordinates(prior.location))>=15000)flags.push('Inspection time vs. distance: two inspections are at least 15 km apart within 10 minutes.');return flags;};
 const dashboardStats = () => {
   const monitored=sites.length, live=sites.filter(site=>site.camera==='Live').length;
   const compliance=monitored?Math.round(sites.reduce((sum,site)=>sum+Number(site.score||0),0)/monitored):0;
@@ -89,14 +94,15 @@ const server = http.createServer(async (req,res) => {
   }
   if (url.pathname === '/api/auth/logout' && req.method === 'POST') { sessions.delete((req.headers.authorization||'').replace('Bearer ','')); return json(res,{ok:true}); }
   if (url.pathname === '/api/feedback' && req.method === 'POST') {
-    const data=await body(req); if(!data.category||!data.message) return json(res,{error:'Please select a grievance category and describe the issue.'},400);
+    const data=await body(req); if(data.__tooLarge)return json(res,{error:'Evidence is too large. Attach one image, video, or audio file up to 3 MB.'},413); if(!data.category||!data.message) return json(res,{error:'Please select a grievance category and describe the issue.'},400);
     if(!/^\d{10}$/.test(String(data.phone||'').replace(/\D/g,''))) return json(res,{error:'Enter a valid 10-digit beneficiary mobile number for verification.'},400);
-    const item={id:'GRV-'+Math.floor(100000+Math.random()*899999),category:data.category,ngo:data.ngo||'Not specified',message:data.message,phone:String(data.phone).replace(/\D/g,''),anonymous:Boolean(data.anonymous),submittedAt:new Date().toISOString(),status:'Received'};
+    const evidence=storedEvidence(data.evidence);if(evidence?.error)return json(res,{error:evidence.error},400);
+    const item={id:'GRV-'+Math.floor(100000+Math.random()*899999),category:data.category,ngo:data.ngo||'Not specified',message:data.message,phone:String(data.phone).replace(/\D/g,''),anonymous:Boolean(data.anonymous),evidence,submittedAt:new Date().toISOString(),status:'Received'};
     feedback.unshift(item); alerts.unshift({id:'AL-'+Math.floor(500+Math.random()*99),type:'Beneficiary grievance',site:item.ngo,text:`New ${item.category.toLowerCase()} grievance received.`,severity:'warning',time:'Just now'}); return json(res,{reference:item.id,status:item.status},201);
   }
   const publicCameraEndpoint=['/api/mobile-cctv/room','/api/mobile-cctv/signal','/api/mobile-cctv/signals','/api/mobile-cctv/frame'].includes(url.pathname);
   if (url.pathname.startsWith('/api/') && !publicCameraEndpoint && !sessionUser(req)) return json(res,{error:'Authentication required.'},401);
-  if (url.pathname === '/api/dashboard') return json(res, { sites, inspections, alerts, reports, inspectors:inspectorRoster.map(({name,workload})=>({name,workload,role:'PMU Inspector'})), stats:dashboardStats() });
+  if (url.pathname === '/api/dashboard') return json(res, { sites, inspections, alerts, reports, feedback, inspectors:inspectorRoster.map(({name,workload})=>({name,workload,role:'PMU Inspector'})), stats:dashboardStats() });
   if (url.pathname === '/api/partner/projects' && req.method === 'GET') {
     const user=sessionUser(req); if(user?.role!=='Project / NGO Administrator') return json(res,{error:'Organisation access required.'},403);
     return json(res,{projects:sites.filter(site=>site.owner===user.registrationId)});
@@ -107,7 +113,8 @@ const server = http.createServer(async (req,res) => {
     const projectInspections=inspections.filter(item=>projectNames.has(item.site));
     const projectReports=reports.filter(item=>projectNames.has(item.site));
     const projectAlerts=alerts.filter(item=>projectNames.has(item.site));
-    return json(res,{projects,inspections:projectInspections,reports:projectReports,alerts:projectAlerts,stats:{projects:projects.length,activeInspections:projectInspections.filter(item=>item.status!=='Completed').length,reports:projectReports.length}});
+    const projectFeedback=feedback.filter(item=>[...projectNames].some(name=>name===item.ngo||name.replace(' (sample)','')===item.ngo));
+    return json(res,{projects,inspections:projectInspections,reports:projectReports,alerts:projectAlerts,feedback:projectFeedback,stats:{projects:projects.length,activeInspections:projectInspections.filter(item=>item.status!=='Completed').length,reports:projectReports.length,grievances:projectFeedback.length}});
   }
   if (url.pathname === '/api/partner/projects' && req.method === 'POST') {
     const user=sessionUser(req); if(user?.role!=='Project / NGO Administrator') return json(res,{error:'Organisation access required.'},403);
@@ -154,9 +161,9 @@ const server = http.createServer(async (req,res) => {
     return json(res,{inspection:job});
   }
   if (url.pathname === '/api/reports' && req.method === 'POST') {
-    const data = await body(req); const report = {id:'RPT-'+crypto.randomUUID().slice(0,6).toUpperCase(), ...data, submittedAt:new Date().toISOString(), status:'Submitted for review'};
-    const job=inspections.find(item=>item.site===data.site&&item.status!=='Completed'); if(job){job.status='Completed';job.completedAt=report.submittedAt;job.reportId=report.id;}
-    reports.unshift(report); alerts.unshift({id:'AL-'+Math.floor(300+Math.random()*99),type:'Inspection report submitted',site:data.site,text:'The on-ground inspection report is ready for organisation review.',severity:'info',time:'Just now'});
+    const data = await body(req); const site=sites.find(item=>item.name===data.site); if(!site)return json(res,{error:'Select a registered project.'},400); const job=inspections.find(item=>item.site===data.site&&item.status!=='Completed'); const submittedAt=new Date();const anomalies=evidenceRules(data,site,job?.inspector||'Unassigned',submittedAt);const report = {id:'RPT-'+crypto.randomUUID().slice(0,6).toUpperCase(), ...data, inspector:job?.inspector||'Unassigned',submittedAt:submittedAt.toISOString(),status:'Submitted for review',anomalies};
+    if(job){job.status='Completed';job.completedAt=report.submittedAt;job.reportId=report.id;}
+    reports.unshift(report); alerts.unshift({id:'AL-'+Math.floor(300+Math.random()*99),type:anomalies.length?'Evidence integrity review required':'Inspection report submitted',site:data.site,text:anomalies.length?anomalies[0]:'The on-ground inspection report is ready for organisation review.',severity:anomalies.length?'warning':'info',time:'Just now'});
     return json(res, report, 201);
   }
   if (url.pathname === '/api/vc' && req.method === 'POST') {
